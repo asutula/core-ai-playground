@@ -88,6 +88,15 @@ struct ModelSpec: Identifiable, Codable, Hashable, Sendable {
     let sourceURL: String?
     let tags: [String]
 
+    /// Direct URL to a downloadable `.aimodel` asset (single file or archive),
+    /// when one is published. Optional: many entries expect you to export the
+    /// asset yourself and paste a URL or load it from disk. Decodes to `nil`
+    /// when absent.
+    var downloadURL: String?
+
+    /// Optional SHA-256 (hex) for integrity verification after download.
+    var sha256: String?
+
     /// `true` when specs come straight from Apple's docs / sessions; `false`
     /// when they are reasonable estimates for a known conversion target.
     let verified: Bool

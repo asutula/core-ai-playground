@@ -60,9 +60,15 @@ Sources/CoreAIPlayground/
 ├── Compatibility/
 │   └── CompatibilityEngine.swift   size-vs-hardware scoring (pure, unit-tested)
 ├── Runner/
-│   └── LanguageRunner.swift        Core AI inference, #if canImport guarded
+│   ├── LanguageRunner.swift        Core AI inference, #if canImport guarded
+│   ├── ModelDownloadManager.swift  in-app URLSession downloads (progress/resume/SHA-256)
+│   └── ModelDownloaderExtension.swift  Background Assets template (opt-in flag)
 ├── UI/                             SwiftUI views (split view, detail, playground)
 └── Resources/catalog.json          curated model snapshot
+
+CoreAIPlayground.xcodeproj          app target (synchronized to Sources/)
+Xcode/Info.plist                    app Info.plist (Background Assets keys scaffolded)
+Xcode/CoreAIPlayground.entitlements sandbox + network + files entitlements
 ```
 
 `CompatibilityEngine`, `HostMachine`, `AppleSiliconDatabase` and `ModelCatalog`
@@ -70,21 +76,49 @@ are free of SwiftUI so they're covered by `Tests/CoreAIPlaygroundTests`.
 
 ## Building & running
 
-Requires **macOS 26+** to build the app shell; **Core AI inference requires
-macOS 27 + Xcode 27** (where `import CoreAILanguageModels` / `import CoreAI`
-resolve).
+There are two ways to build, sharing the **same** `Sources/` via an Xcode
+file-system-synchronized group:
+
+| | `CoreAIPlayground.xcodeproj` | `Package.swift` (SPM) |
+| --- | --- | --- |
+| Sandboxed `.app` bundle | ✅ | — |
+| Entitlements (network, files) | ✅ | — |
+| In-app `.aimodel` downloads | ✅ | ✅ (no sandbox) |
+| Background Assets delivery | ✅ (add extension target) | — |
+| `swift test` from CLI | — | ✅ |
 
 ```bash
-# Open in Xcode (recommended)
-open Package.swift
+# Full app (recommended): open the project, pick the CoreAIPlayground scheme, Run.
+open CoreAIPlayground.xcodeproj
 
-# …or from the command line
-swift build
-swift run CoreAIPlayground
-
-# Tests (catalog + hardware + compatibility logic)
-swift test
+# CLI / tests against the shared sources
+open Package.swift          # or: swift build && swift run CoreAIPlayground
+swift test                  # catalog + hardware + compatibility + download logic
 ```
+
+Deployment target is **macOS 26.0**; **Core AI inference requires macOS 27 +
+Xcode 27** (where `import CoreAILanguageModels` / `import CoreAI` resolve) and is
+gated by `#if canImport(...)`, so the app builds and runs on 26 with everything
+except live inference.
+
+### App target & entitlements
+
+`CoreAIPlayground.xcodeproj` produces a sandboxed app (`Xcode/CoreAIPlayground.entitlements`):
+
+- `com.apple.security.app-sandbox`
+- `com.apple.security.network.client` — for downloading `.aimodel` assets
+- `com.apple.security.files.user-selected.read-write` — for "Load .aimodel…"
+
+Set your **Development Team** in *Signing & Capabilities* on first build.
+
+### Downloading models (in-app)
+
+The Playground tab has an asset row: paste a URL to an exported `.aimodel`
+(or it's prefilled from the catalog's `downloadURL` when present) and hit
+**Download**. `ModelDownloadManager` (a background-capable `URLSession`) streams
+it into the sandbox container — `~/Library/Application Support/<bundle>/Models/<id>/` —
+with progress, cancel, resume, and optional SHA-256 verification, then offers
+**Load this asset** to hand it to the runtime.
 
 ### Graceful degradation
 
@@ -104,8 +138,28 @@ uv run coreai.model.registry --list-models      # authoritative catalog
 # export a recipe → produces a .aimodel resource folder, then "Load .aimodel…"
 ```
 
-Apps typically ship these via **Background Assets** and compile them
-ahead-of-time with `xcrun coreai-build compile MyModel.aimodel --platform macOS`.
+Compile them ahead-of-time with
+`xcrun coreai-build compile MyModel.aimodel --platform macOS`.
+
+### Production delivery via Background Assets
+
+The in-app downloader runs only while the app is open. For shipping large models
+the Apple-recommended path is **Background Assets**, which downloads packs
+out-of-process — even before first launch — driven by a hosted manifest.
+`Sources/CoreAIPlayground/Runner/ModelDownloaderExtension.swift` is a
+ready-to-wire `BADownloaderExtension` template, compiled only behind the
+`BACKGROUND_ASSETS_EXTENSION` flag. To activate it:
+
+1. Add a **Background Download** app-extension target; make this class its
+   `@main` principal class and add `BACKGROUND_ASSETS_EXTENSION` to its *Active
+   Compilation Conditions*.
+2. Add the `com.apple.developer.background-assets` entitlement to the app **and**
+   the extension (needs a provisioning profile authorizing it). The entitlements
+   file has this scaffolded and commented.
+3. Add `BAManifestURL` (+ `BAMaxInstallSize`) to `Xcode/Info.plist` — also
+   scaffolded and commented — pointing at your hosted manifest.
+4. Optionally share a `group.io.textile.CoreAIPlayground` app group so the
+   extension can hand finished downloads to the app.
 
 ## Caveats & honesty
 

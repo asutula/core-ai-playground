@@ -3,11 +3,12 @@
 .swiftpm/
 Package.resolved
 
-# Xcode
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+# Xcode (track project + shared schemes, ignore per-user state & build output)
+xcuserdata/
+**/xcuserdata/
 DerivedData/
 *.xcuserstate
+build/
 
 # macOS
 .DS_Store

@@ -7,6 +7,8 @@ import Observation
 final class AppModel {
     let host: HostMachine
     let catalog: ModelCatalog
+    /// Shared across model selections so downloads survive navigation.
+    let downloads = ModelDownloadManager()
     var selectedModelID: ModelSpec.ID?
     var modalityFilter: ModelSpec.Modality?
     var searchText: String = ""

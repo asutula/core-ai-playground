@@ -11,6 +11,7 @@ struct PlaygroundView: View {
     @State private var prompt: String = "Explain on-device AI in two sentences."
     @State private var output: String = ""
     @State private var showingImporter = false
+    @State private var pasteURL: String = ""
 
     private var verdict: CompatibilityEngine.Verdict {
         appModel.verdict(for: model)
@@ -27,6 +28,8 @@ struct PlaygroundView: View {
             if model.modality != .languageModel {
                 modalityNote
             }
+
+            downloadSection
 
             modelLoaderRow
 
@@ -68,6 +71,80 @@ struct PlaygroundView: View {
             }
             Spacer()
         }
+    }
+
+    // MARK: Download
+
+    private var downloadSection: some View {
+        let phase = appModel.downloads.phase(for: model)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField("https://…/\(model.id).aimodel", text: $pasteURL)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption.monospaced())
+                    .disabled(phase.isActive)
+
+                switch phase {
+                case .downloading, .verifying:
+                    Button(role: .cancel) { appModel.downloads.cancel(model: model) } label: {
+                        Label("Cancel", systemImage: "xmark")
+                    }
+                default:
+                    Button { startDownload() } label: {
+                        Label("Download", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(URL(string: pasteURL.trimmingCharacters(in: .whitespaces)) == nil)
+                }
+            }
+
+            switch phase {
+            case .downloading(let fraction, let received, let total):
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: fraction)
+                    Text(total > 0
+                         ? "\(byteString(received)) of \(byteString(total)) (\(Int(fraction * 100))%)"
+                         : "\(byteString(received)) downloaded…")
+                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            case .verifying:
+                Label("Verifying checksum…", systemImage: "checkmark.shield").font(.caption2).foregroundStyle(.secondary)
+            case .finished(let url):
+                HStack(spacing: 8) {
+                    Label("Downloaded \(url.lastPathComponent)", systemImage: "checkmark.circle.fill")
+                        .font(.caption).foregroundStyle(.green)
+                    Button("Load this asset") { Task { await runner.load(modelAt: url) } }
+                        .font(.caption)
+                        .disabled(!LanguageRunner.runtimeAvailable)
+                }
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle").font(.caption2).foregroundStyle(.orange)
+            case .idle:
+                if let existing = appModel.downloads.existingAsset(for: model) {
+                    Button { Task { await runner.load(modelAt: existing) } } label: {
+                        Label("Use previously downloaded \(existing.lastPathComponent)", systemImage: "internaldrive")
+                    }
+                    .font(.caption)
+                    .disabled(!LanguageRunner.runtimeAvailable)
+                } else {
+                    Text("Paste a URL to an exported .aimodel asset, or load one from disk below.")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .onAppear {
+            appModel.downloads.register(model)
+            if pasteURL.isEmpty, let u = model.downloadURL { pasteURL = u }
+        }
+    }
+
+    private func startDownload() {
+        guard let url = URL(string: pasteURL.trimmingCharacters(in: .whitespaces)) else { return }
+        appModel.downloads.register(model)
+        appModel.downloads.download(model: model, from: url)
+    }
+
+    private func byteString(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     private var promptEditor: some View {

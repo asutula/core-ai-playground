@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Run sandboxed, as required for distribution. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Outbound networking for downloading .aimodel assets. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Let the user pick a local .aimodel folder/file via the open panel. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!--
+	  Production delivery via Background Assets needs the line below on BOTH the
+	  app and the Background Download extension, plus a provisioning profile that
+	  authorizes it (configured in App Store Connect). Left commented because
+	  enabling it without matching provisioning breaks code signing locally.
+
+	  <key>com.apple.developer.background-assets</key>
+	  <true/>
+
+	  A shared app group is also handy so the extension can hand finished
+	  downloads to the app:
+
+	  <key>com.apple.security.application-groups</key>
+	  <array>
+	      <string>group.io.textile.CoreAIPlayground</string>
+	  </array>
+	-->
+</dict>
+</plist>

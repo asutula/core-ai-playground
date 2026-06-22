@@ -11,10 +11,30 @@ struct ModelCatalog: Sendable {
         let models: [ModelSpec]
     }
 
-    /// Loads `catalog.json` from the module bundle. Falls back to an empty
+    /// The bundle that carries `catalog.json`. SwiftPM synthesizes
+    /// `Bundle.module`; the Xcode app target ships it in `Bundle.main`.
+    static var resourceBundle: Bundle {
+        #if SWIFT_PACKAGE
+        return .module
+        #else
+        return .main
+        #endif
+    }
+
+    /// Locates `catalog.json` whether it sits at the bundle's resource root or
+    /// under a `Resources/` subdirectory (depends on the build system).
+    static func catalogURL() -> URL? {
+        let bundle = resourceBundle
+        if let url = bundle.url(forResource: "catalog", withExtension: "json") {
+            return url
+        }
+        return bundle.url(forResource: "catalog", withExtension: "json", subdirectory: "Resources")
+    }
+
+    /// Loads `catalog.json` from the appropriate bundle. Falls back to an empty
     /// catalog (with a diagnostic note) rather than crashing if decoding fails.
     static func loadBundled() -> ModelCatalog {
-        guard let url = Bundle.module.url(forResource: "catalog", withExtension: "json") else {
+        guard let url = catalogURL() else {
             return ModelCatalog(models: [], note: "catalog.json not found in bundle.")
         }
         do {
